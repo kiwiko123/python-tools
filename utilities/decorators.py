@@ -43,7 +43,6 @@ class _ContractCondition:
         self._condition = condition
         self._exc = exception
         self._msg = msg
-        self._is_method = False
 
     def __repr__(self) -> str:
         return '{0}({1}, exception={2}, msg={3})'.format(type(self).__name__, self._condition, self._exc, self._msg)
@@ -68,24 +67,24 @@ class _ContractCondition:
     def check_condition(self, *args, **kwargs):
         if not self._condition(*args, **kwargs):
             if not self._msg:
-                self._msg = 'arguments {0}, {1} failed to meet expected {2}'.format(args, kwargs, type(self).__name__)
+                self._msg = '@{0}: arguments {1}, {2} failed to meet expected condition'.format(type(self).__name__, args, kwargs)
             raise self._exc(self._msg)
 
 
 
-class precondition(_ContractCondition):
+class expects(_ContractCondition):
     """ Function decorator.
-        Examines and places a contract precondition on the decorated function's arguments.
+        Examines and places a contract expects on the decorated function's arguments.
         Raises an exception if such condition is not met.
 
         e.g.,
-        @precondition(lambda a, b: type(a) is int and type(b) is int)
+        @expects(lambda a, b: type(a) is int and type(b) is int)
         def add(a, b):
           return a + b
 
         When decorating a bound instance method, the condition function must omit the 'self' argument.
         e.g.,
-        @precondition(lambda a: a > 0)      # not @precondition(lambda self, a: a > 0)
+        @expects(lambda a: a > 0)      # not @expects(lambda self, a: a > 0)
         def update(self, value):
             self._value = value
     """
@@ -94,35 +93,37 @@ class precondition(_ContractCondition):
 
     def __call__(self, function):
         def _interceptor(*args, **kwargs):
-            if self.is_method(function, *args):
+            if self._is_method(function, *args):
                 self.check_condition(*(args[1:]), **kwargs)
             else:
                 self.check_condition(*args, **kwargs)
 
             return function(*args, **kwargs)
 
+        _interceptor.__name__ = function.__name__
         return _interceptor
 
     @staticmethod
-    def is_method(function: callable, *args) -> bool:
+    def _is_method(function: callable, *args) -> bool:
         """ Returns True if the decorated function is a method;
             examines args to see if the first argument is an object,
             and checks if function is a member of that object.
         """
         if args:
             instance = args[0]
-            return any(member == function for name, member in inspect.getmembers(instance))
+            member = getattr(instance, function.__name__, None)
+            return member is not None and inspect.ismethod(member)
         return False
 
 
-class postcondition(_ContractCondition):
+class ensures(_ContractCondition):
     """ Function decorator.
-        Examines and places a contract postcondition on the return value of the decorated function.
+        Examines and places a contract ensures on the return value of the decorated function.
         Raises an exception if such condition is not met.
         Condition function must take 1 parameter only (representing the return value of the decorated function).
 
         e.g.,
-        @postcondition(lambda r: r > 10)
+        @ensures(lambda r: r > 10)
         def add(a, b):
           return a + b
     """
@@ -136,7 +137,9 @@ class postcondition(_ContractCondition):
         def _interceptor(*args, **kwargs):
             result = function(*args, **kwargs)
             self.check_condition(result)
+            return result
 
+        _interceptor.__name__ = function.__name__
         return _interceptor
 
 
