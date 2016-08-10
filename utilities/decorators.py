@@ -74,7 +74,7 @@ class _ContractCondition:
 
 class expects(_ContractCondition):
     """ Function decorator.
-        Examines and places a contract expects on the decorated function's arguments.
+        Examines and places a contract on the decorated function's arguments.
         Raises an exception if such condition is not met.
 
         e.g.,
@@ -88,15 +88,10 @@ class expects(_ContractCondition):
         def update(self, value):
             self._value = value
     """
-    def __init__(self, condition: callable, exception=AssertionError, msg=''):
-        super().__init__(condition, exception, msg)
-
     def __call__(self, function):
         def _interceptor(*args, **kwargs):
-            if self._is_method(function, *args):
-                self.check_condition(*(args[1:]), **kwargs)
-            else:
-                self.check_condition(*args, **kwargs)
+            check = args[1:] if self._is_method(function, *args) else args
+            self.check_condition(*check, **kwargs)
 
             return function(*args, **kwargs)
 
@@ -118,7 +113,7 @@ class expects(_ContractCondition):
 
 class ensures(_ContractCondition):
     """ Function decorator.
-        Examines and places a contract ensures on the return value of the decorated function.
+        Examines and places a contract on the return value of the decorated function.
         Raises an exception if such condition is not met.
         Condition function must take 1 parameter only (representing the return value of the decorated function).
 
