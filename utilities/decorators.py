@@ -1,40 +1,20 @@
+# These 'contract condition' decorators are inspired by the
+# anticipated addition of contracts in C++17.
+# Written in pure Python, these decorators allow easy, readable type management;
+# they eliminate the following semi-common Python idioms
+# that tend to be present at the top of many functions:
+#
+#   if not type(x) is ... // if not isinstance(x, ...):
+#       raise TypeError
+#
+# Intuitive contract conditions promote more readable, maintanable Python code -
+# which is an aspect of the language that is quite commonly criticized,
+# especially since an astonishing amount of Python programmers do not take advantage
+# of 3.x's function argument annotations.
+#
+# Author: Geoffrey Ko (2017)
 import abc
-import copy
-import functools
 import inspect
-
-
-class const:
-    """ Instance method decorator.
-        Raises AttributeError upon calling the decorated method
-        if it modifies the object's state.
-    """
-    def __init__(self, method: callable):
-        if not callable(method):
-            raise TypeError('expected callable method object; received {0}'.format(method))
-        self._method = method
-
-    def __repr__(self) -> str:
-        return '{0}({1})'.format(self.__class__.__name__, self._method)
-
-    def __str__(self) -> str:
-        return 'const_method({0})'.format(self._method.__name__)
-
-    def __get__(self, instance, owner):
-        """ Binds instance as the first argument to __call__ """
-        return functools.partial(self.__call__, instance)
-
-    def __call__(self, *args, **kwargs):
-        if not (args and hasattr(args[0], self._method.__name__)):
-            raise ValueError('expected bound instance method; received {0}'.format(self._method))
-        instance = args[0]
-        state = copy.deepcopy(instance.__dict__)
-        result = self._method(*args, **kwargs)
-
-        if instance.__dict__ != state:
-            raise AttributeError('{0} attempted to modify object {1}'.format(self._method, instance))
-
-        return result
 
 
 
@@ -59,11 +39,6 @@ class _ContractCondition:
         """ Access the condition function """
         return self._condition
 
-    @condition.setter
-    def condition(self, new_condition: callable) -> None:
-        """ Update to new condition """
-        self._condition = new_condition
-
     def check_condition(self, *args, **kwargs):
         if not self._condition(*args, **kwargs):
             if not self._msg:
@@ -81,18 +56,43 @@ class expects(_ContractCondition):
         @expects(lambda a, b: type(a) is int and type(b) is int)
         def add(a, b):
           return a + b
-
         When decorating a bound instance method, the condition function must omit the 'self' argument.
         e.g.,
         @expects(lambda a: a > 0)      # not @expects(lambda self, a: a > 0)
         def update(self, value):
             self._value = value
     """
-    def __call__(self, function):
-        def _interceptor(*args, **kwargs):
-            check = args[1:] if self._is_method(function, *args) else args
-            self.check_condition(*check, **kwargs)
+    def __init__(self, condition: callable, exception=AssertionError, msg='', args=True, instance=False):
+        """
+        Default arguments affecting the condition function's parameter structure:
+         * set args=True to accept all of the decorated callable's recognized arguments in the condition (default).
+         * set instance=True to accept the object that the decorated bound method is operating on ('self' parameter).
+         * set args=True, instance=False to accept all arguments after the decorated method's 'self' parameter.
+         * set args=False, instance=True to accept only the passed instance as the condition function's sole argument.
+         * args and instance cannot both be False.
+         * raises ValueError in the event of an illegal combination.
+        """
+        self._args = args
+        self._instance = instance
+        super().__init__(condition, exception=exception, msg=msg)
 
+    def __call__(self, function: callable):
+        def _interceptor(*args, **kwargs):
+            is_method = self._is_method(function, *args)
+            if self._instance and not is_method:
+                raise ValueError('instance=True but decorated callable is not a bound method')
+
+            if self._args:
+                check = args
+                if is_method and not self._instance:
+                    check = args[1:]
+            elif self._instance:
+                if is_method:
+                    check = args[0]
+            else:
+                raise ValueError('neither args nor instance are True; logic states zero arguments')
+
+            self.check_condition(*check, **kwargs)
             return function(*args, **kwargs)
 
         _interceptor.__name__ = function.__name__
@@ -116,7 +116,6 @@ class ensures(_ContractCondition):
         Examines and places a contract on the return value of the decorated function.
         Raises an exception if such condition is not met.
         Condition function must take 1 parameter only (representing the return value of the decorated function).
-
         e.g.,
         @ensures(lambda r: r > 10)
         def add(a, b):
@@ -128,7 +127,7 @@ class ensures(_ContractCondition):
             raise ValueError('condition function takes exactly 1 parameter (representing the returned result of the decorated function); received {0}'.format(len(signature.parameters)))
         super().__init__(condition, exception, msg)
 
-    def __call__(self, function):
+    def __call__(self, function: callable):
         def _interceptor(*args, **kwargs):
             result = function(*args, **kwargs)
             self.check_condition(result)
@@ -136,7 +135,6 @@ class ensures(_ContractCondition):
 
         _interceptor.__name__ = function.__name__
         return _interceptor
-
 
 
 if __name__ == '__main__':
