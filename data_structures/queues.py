@@ -1,31 +1,30 @@
 # Author: Geoffrey Ko (2018)
 # Developed with Python 3.5.0b3
 import abc
-import operator
 import math
+import operator
 
 
 class _BaseQueue(metaclass=abc.ABCMeta):
     """
-    Base class defining methods common to queue data types.
+    Base class defining methods common to queue-like data types.
     The underlying data structure is by default a list, but can be changed (see @property container_type).
     Derived classes MUST implement methods top(), push(), and pop().
     """
     def __init__(self, container_type=list):
-       self.__container_type = container_type
-       self.__container = self.container_type()
+       self.container_type = container_type
 
     @property
     def container_type(self) -> type:
         """
-        Returns the type of the underlying data structure used to represent this queue.
+        Returns the type of the underlying data structure used to implement this queue.
         """
         return self.__container_type
 
     @container_type.setter
     def container_type(self, new_type: type) -> None:
         """
-        Sets the type of the underlying data structure used to represent this queue.
+        Sets the type of the underlying data structure used to implement this queue.
         In setting the new type, it will also convert the existing container to the new type.
         """
         self.__container_type = new_type
@@ -42,15 +41,21 @@ class _BaseQueue(metaclass=abc.ABCMeta):
         return repr(self)
 
     def __len__(self) -> int:
-        """ Returns the number of items in this queue. """
+        """
+        Returns the number of items in this queue.
+        """
         return len(self._container)
 
     def __bool__(self) -> bool:
-        """ Returns False if this queue is empty, or True if non-empty. """
+        """
+        Returns False if this queue is empty, or True if non-empty.
+        """
         return len(self) > 0
 
     def __contains__(self, item) -> bool:
-        """ Returns True if 'item' is contained within the queue, or False if not. """
+        """
+        Returns True if 'item' is contained within the queue, or False if not.
+        """
         return item in self._container
 
     def __iter__(self):
@@ -78,8 +83,11 @@ class PriorityQueue(_BaseQueue):
     A Pythonic implementation of a heap priority queue.
     The initializer provides control over order through 'key' and 'reverse' parameters, similar to sorted(...).
     By default (with reverse=False), a max-heap is used.
-    For more informative documentation, see my C++ heap priority queue implementation at:
-      https://github.com/kogw/cpp-tools/blob/master/data_structures/binary_heap.hpp
+
+    heapq, a module in the Python Standard Library, makes for an efficient priority queue implementation.
+    However, it is not as high level and is unnecessarily confusing to use with custom comparators.
+    This implementation provides a simple, Pythonic way to use a priority queue with any ordering through
+    parameters similar to sorted(...) (see __init__).
     """
 
     @property
@@ -109,8 +117,10 @@ class PriorityQueue(_BaseQueue):
         here items will be ordered from GREATEST to LEAST;
         sorted(...) by default orders items from LEAST to GREATEST.
         These orders can be flipped by setting 'reverse=True'.
-        Items are deemed greater/less than others as per their __gt__ and __lt__ methods -
+        By default, items are deemed greater/less than others as per their __gt__ and __lt__ methods -
         i.e.,  the object returned by 'key(x)' must have implemented __gt__ and/or __lt__ methods.
+        Alternatively, you can provide custom predicate functions as arguments to the 'gt' and 'lt' parameters
+        instead of overloading __gt__ and __lt__ methods.
         """
         if not callable(key):
             raise ValueError('key must be a unary callable predicate')
@@ -140,6 +150,9 @@ class PriorityQueue(_BaseQueue):
         Returns a copy of the object.
         If deep=True, returns a deep copy (different object, same contents).
         Otherwise, returns a reference to itself (same object).
+
+        Θ(n) time when deep=True,
+        Θ(1) time otherwise.
         """
         return PriorityQueue(self._container, key=self._key, reverse=self._reverse) if deep else self
 
@@ -149,7 +162,7 @@ class PriorityQueue(_BaseQueue):
         Returns the highest-priority object in the queue.
         Raises ValueError if the queue is empty.
 
-        O(1) time.
+        Θ(1) time.
         """
         if not self:
             raise ValueError('queue is already empty')
@@ -160,7 +173,7 @@ class PriorityQueue(_BaseQueue):
         """
         Adds 'item' into the queue, in its appropriate order.
 
-        O(log N) time.
+        O(log n) time.
         """
         self._container.append(item)
         self._sift_up(len(self) - 1)
@@ -172,7 +185,7 @@ class PriorityQueue(_BaseQueue):
         Re-orders the queue if necessary.
         Raises ValueError if the queue is already empty.
 
-        O(log N) time.
+        O(log n) time.
         """
         if not self:
             raise ValueError('pop from empty queue')
@@ -183,11 +196,14 @@ class PriorityQueue(_BaseQueue):
 
     def remove(self, index: int) -> None:
         """
+        Caution - do not use this unless fine-grained control is needed.
+        Use sparingly in conjunction with the methods 'find(...)' and 'view()'.
+
         Helper method that removes the item at position 'index' in the underlying list.
         Raises ValueError if the queue is already empty.
         Raises IndexError if 'index' is out of bounds.
 
-        O(log N) time.
+        O(log n) time.
         """
         if not self:
             raise ValueError('removal from empty queue')
@@ -200,10 +216,26 @@ class PriorityQueue(_BaseQueue):
         self._sift_down(index)
 
 
+    def view(self) -> tuple:
+        """
+        Returns a tuple representing the underlying list.
+        A separate tuple is returned as to prevent modification of the underlying list.
+
+        Use in conjunction with the methods 'find(...)' and 'remove(...)'.
+
+        Θ(n) time.
+        """
+        return tuple(self._container)
+
+
     def find(self, item) -> int:
         """
         Returns the index of item in the underlying list, or -1 if not found.
         Similar to list.index, but returns -1 upon failure instead of raising ValueError.
+
+        Use in conjunction with the methods 'view()' and 'remove(...)'.
+
+        O(n) time.
         """
         try:
             return self._container.index(item)
@@ -219,6 +251,11 @@ class PriorityQueue(_BaseQueue):
 
 
     def _sift_up(self, i: int) -> None:
+        """
+        Recursively swaps the value at list index 'i' with its parent until the invariant is restored.
+
+        O(log n) time.
+        """
         parent = self._parent_of(i)
         if self._in_heap(i) and self._in_heap(parent) and self._compare(i, parent):
             self._container[i], self._container[parent] = self._container[parent], self._container[i]
@@ -226,6 +263,11 @@ class PriorityQueue(_BaseQueue):
 
 
     def _sift_down(self, i: int) -> None:
+        """
+        Recursively swaps the value at list index 'i' with the larger of its 2 children until the invariant is restored.
+
+        O(log n) time.
+        """
         left = self._left_child(i)
         right = self._right_child(i)
         larger = None
@@ -243,26 +285,45 @@ class PriorityQueue(_BaseQueue):
 
 
     def _heapify(self) -> None:
-        for i in range(len(self) - 1, -1, -1):
+        """
+        Converts the arbitrary list into a heap.
+
+        O(n) time.
+        """
+        for i in range(self._parent_of(len(self)), -1, -1):
             self._sift_down(i)
 
 
     def _in_heap(self, i: int) -> bool:
+        """
+        Returns True if index 'i' is within the bounds of the list's size.
+
+        Θ(1) time.
+        """
         return 0 <= i < len(self)
 
 
     @staticmethod
     def _parent_of(i: int) -> int:
+        """
+        Returns the index of i's parent ((i - 1) // 2) in the heap.
+        """
         return math.floor((i - 1) / 2)
 
 
     @staticmethod
     def _left_child(i: int) -> int:
+        """
+        Returns the index of i's left child (2i + 1) in the heap.
+        """
         return 2 * i + 1
 
 
     @staticmethod
     def _right_child(i: int) -> int:
+        """
+        Returns the index of i's right child (2i + 2) in the heap.
+        """
         return 2 * i + 2
 
 
