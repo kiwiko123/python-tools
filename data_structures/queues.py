@@ -12,7 +12,8 @@ class _BaseQueue(metaclass=abc.ABCMeta):
     Derived classes MUST implement methods top(), push(), and pop().
     """
     def __init__(self, container_type=list):
-       self.container_type = container_type
+        self.__container_type = container_type
+        self.__container = container_type()
 
     @property
     def container_type(self) -> type:
@@ -106,6 +107,10 @@ class PriorityQueue(_BaseQueue):
         * iterable: if non-empty, adds in all items and appropriately orders them.
             - O(N) optimized - appends all items (linearly) to the underlying list, then heapifies itself.
         * key: unary callable function that returns the object to be sorted. See parameters of sorted(...) for details.
+            - TIP: to sort by multiple criteria, use a tuple, where each item is the sorting predicate;
+              e.g., to sort first by even numbers, then numbers less than 10, use:
+                key=lambda x: (x % 2 == 0, x < 10)
+              Items will be sorted in the order that the criteria appears in the returned tuple.
         * reverse: set True if items should be arranged in reverse order (read below).
         * gt: binary predicate that returns True if its first argument is deemed greater than its second (e.g., a > b).
             - used only when reverse=False.
