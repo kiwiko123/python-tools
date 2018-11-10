@@ -1,14 +1,12 @@
 # These 'contract condition' decorators are inspired by the proposed addition of contracts in C++17.
 # 
-# These decorators allow easy, readable type management - 
-# they eliminate the following semi-common Python idioms that tend to be present at the top of many functions:
+# These decorators allow easy, readable type management
+# by eliminating the following semi-common Python idioms that tend to be present at the top of many functions:
 #
 #   if not type(x) is ...   # or. if not isinstance(x, ...):
 #       raise TypeError(...)
 #
-# Intuitive contract conditions promote more readable, maintanable Python code -
-# an aspect of the language that is quite commonly criticized,
-# especially since a large amount of Python programmers do not take advantage of 3.x's function argument annotations.
+# Intuitive contract conditions promote more readable, maintanable Python code.
 #
 # Author: Geoffrey Ko (2017)
 import abc
@@ -18,11 +16,11 @@ import inspect
 class _ContractCondition(metaclass=abc.ABCMeta):
     def __init__(self, condition: callable, exception=AssertionError, msg=''):
         self._condition = condition
-        self._exc = exception
+        self._exception = exception
         self._msg = msg
 
     def __repr__(self) -> str:
-        return '{0}({1}, exception={2}, msg={3})'.format(type(self).__name__, self._condition, self._exc, self._msg)
+        return '{0}({1}, exception={2}, msg={3})'.format(type(self).__name__, self._condition, self._exception, self._msg)
 
     def __str__(self) -> str:
         return repr(self)
@@ -31,86 +29,69 @@ class _ContractCondition(metaclass=abc.ABCMeta):
     def __call__(self, function: callable):
         pass
 
-    def check_condition(self, *args, **kwargs):
+    def check_condition(self, *args, **kwargs) -> None:
         if not self._condition(*args, **kwargs):
             msg = self._msg
             if not self._msg:
-                msg = '@{0}: arguments *{1}, **{2} failed to meet expected condition'.format(type(self).__name__, args, kwargs)
-            raise self._exc(msg)
+                msg = '@{0}: arguments ({1}, {2}) failed to meet expected condition'.format(type(self).__name__, args, kwargs)
+            raise self._exception(msg)
+
+    def check_number_of_arguments(self, function: callable, expected: int) -> None:
+        actual = self.get_number_of_arguments(function)
+        if actual != expected:
+            message = "Expected {0} arguments; received {1}. If you're decorating a method, did you include `self`?".format(expected, actual)
+            raise self._exception(message)
+
+    @staticmethod
+    def get_number_of_arguments(function: callable) -> int:
+        signature = inspect.signature(function)
+        return len(signature.parameters)
 
 
 class expects(_ContractCondition):
-    """ Function decorator.
-        Examines and places a contract on the decorated function's arguments.
+    """ Function/method decorator.
+        Examines and places a pre-condition contract on the decorated function's arguments.
         Raises an exception if such condition is not met.
-        e.g.,
+        The condition function must take the same number of arguments as the decorated function.
+        ----------
         @expects(lambda a, b: type(a) is int and type(b) is int)
         def add(a, b):
           return a + b
+
+        When decorating an instance method, you must include an argument for `self`.
+        ----------
+        class Foo:
+            @expects(lambda a, b: b > 5)    # here, `a` corresponds to `self`, and `b` corresponds to `x`
+            def bar(self, x):
+                pass
     """
-    def __init__(self, condition: callable, exception=AssertionError, msg='', args=True, instance=False):
-        """
-        Default arguments affecting the condition function's parameter structure:
-         * set args=True to accept all of the decorated callable's recognized arguments in the condition (default).
-         * set instance=True to accept the object that the decorated bound method is operating on ('self' parameter).
-         * set args=True, instance=False to accept all arguments after the decorated method's 'self' parameter.
-         * set args=False, instance=True to accept only the passed instance as the condition function's sole argument.
-         * args and instance cannot both be False.
-         * raises ValueError in the event of an illegal combination.
-        """
-        self._args = args
-        self._instance = instance
+    def __init__(self, condition: callable, exception=AssertionError, msg=''):
         super().__init__(condition, exception=exception, msg=msg)
 
     def __call__(self, function: callable):
+        number_of_arguments = self.get_number_of_arguments(function)
+        self.check_number_of_arguments(self._condition, number_of_arguments)
+
         def _interceptor(*args, **kwargs):
-            is_method = self._is_method(function, *args)
-            if self._instance and not is_method:
-                raise ValueError('instance=True but decorated callable {0} is not a bound method'.format(function))
-
-            if self._args:
-                check = args
-                if is_method and not self._instance:
-                    check = args[1:]
-            elif self._instance:
-                if is_method:
-                    check = args[0]
-            else:
-                raise ValueError('neither args nor instance are True; logic states zero arguments')
-
-            self.check_condition(*check, **kwargs)
+            self.check_condition(*args, **kwargs)
             return function(*args, **kwargs)
 
         _interceptor.__name__ = function.__name__
         return _interceptor
 
-    @staticmethod
-    def _is_method(function: callable, *args) -> bool:
-        """ Returns True if the decorated function is a method;
-            examines args to see if the first argument is an object,
-            and checks if function is a member of that object.
-        """
-        if args:
-            instance = args[0]
-            member = getattr(instance, function.__name__, None)
-            return member is not None and inspect.ismethod(member)
-        return False
-
 
 class ensures(_ContractCondition):
-    """ Function decorator.
-        Examines and places a contract on the return value of the decorated function.
+    """ Function/method decorator.
+        Examines and places a post-condition contract on the return value of the decorated function.
         Raises an exception if such condition is not met.
-        Condition function must take 1 parameter only (representing the return value of the decorated function).
-        e.g.,
-        @ensures(lambda r: r > 10)
+        The condition function must take exactly 1 argument, representing the return value of the decorated function.
+        ----------
+        @ensures(lambda x: x > 10)
         def add(a, b):
           return a + b
     """
     def __init__(self, condition: callable, exception=AssertionError, msg=''):
-        signature = inspect.signature(condition)
-        if len(signature.parameters) != 1:
-            raise ValueError('condition function takes exactly 1 parameter (representing the returned result of the decorated function); received {0}'.format(len(signature.parameters)))
+        self.check_number_of_arguments(condition, 1)
         super().__init__(condition, exception=exception, msg=msg)
 
     def __call__(self, function: callable):
