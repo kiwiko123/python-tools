@@ -3,9 +3,10 @@
 import abc
 import math
 import operator
+from containers import BaseContainer
 
 
-class _BaseQueue(metaclass=abc.ABCMeta):
+class _BaseQueue(BaseContainer):
     """
     Base class defining methods common to queue-like data types.
     The underlying data structure is by default a list, but can be changed (see @property container_type).
@@ -47,23 +48,8 @@ class _BaseQueue(metaclass=abc.ABCMeta):
         """
         return len(self._container)
 
-    def __bool__(self) -> bool:
-        """
-        Returns False if this queue is empty, or True if non-empty.
-        """
-        return len(self) > 0
-
-    def __contains__(self, item) -> bool:
-        """
-        Returns True if 'item' is contained within the queue, or False if not.
-        """
-        return item in self._container
-
     def __iter__(self):
         yield from self._container
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, type(self)) and self._container == other._container
 
     @abc.abstractmethod
     def top(self):
@@ -330,7 +316,6 @@ class PriorityQueue(_BaseQueue):
         Returns the index of i's right child (2i + 2) in the heap.
         """
         return 2 * i + 2
-
 
 
 if __name__ == '__main__':

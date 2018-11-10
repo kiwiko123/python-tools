@@ -19,7 +19,15 @@ class MultiSet(BaseContainer):
         )
 
     def __repr__(self) -> str:
-        return str(self)
+        result = []
+        for item, count in self._container.items():
+            for _ in range(count):
+                result.append(item)
+
+        return '{0}({1})'.format(
+            type(self).__name__,
+            str(result)
+        )
 
     def __len__(self) -> int:
         return self._size
@@ -48,11 +56,25 @@ class MultiSet(BaseContainer):
             raise KeyError('"{0}" not in set'.format(item))
 
     def union(self, other: set) -> 'MultiSet':
-        if isinstance(other, set) or isinstance(other, MultiSet):
-            for item in other:
-                self.add(other)
-        else:
+        if not (isinstance(other, set) or isinstance(other, MultiSet)):
             raise TypeError('union only takes a set or MultiSet; received {0}'.format(type(other)))
+
+        result = MultiSet()
+        for item in other:
+            result.add(item)
+
+        return result
+
+    def intersection(self, other: set) -> 'MultiSet':
+        if not (isinstance(other, set) or isinstance(other, MultiSet)):
+            raise TypeError('intersection only takes a set or MultiSet; received {0}'.format(type(other)))
+
+        result = MultiSet()
+        for item in other:
+            if item in self:
+                result.add(item)
+
+        return result
 
 
 if __name__ == '__main__':
