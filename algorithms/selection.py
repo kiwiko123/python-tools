@@ -56,7 +56,6 @@ def deterministic_select(iterable, k: int):
 
         Although this is done in linear time, there is a high constant associated with brute-forcing the medians.
         Quick-select could very well perform faster in some cases.
-
     """
     constant = 5
     size = len(iterable)
