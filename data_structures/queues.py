@@ -135,9 +135,7 @@ class PriorityQueue(BaseQueue):
 
     def copy(self) -> 'PriorityQueue':
         """
-        Returns a copy of the object.
-        If deep=True, returns a deep copy (different object, same contents).
-        Otherwise, returns a reference to itself (same object).
+        Returns a new PriorityQueue object containing the same properties and values as this one.
         """
         return PriorityQueue(self._container, key=self._key, reverse=self._reverse)
 
