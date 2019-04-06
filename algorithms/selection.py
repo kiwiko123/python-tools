@@ -62,7 +62,7 @@ def deterministic_select(iterable, k: int):
     if size <= constant:
         return brute_force_select(iterable, k)
 
-    n_groups = _ceil(size / constant)
+    n_groups = math.ceil(size / constant)
     groups = [[None for _ in range(constant)] for _ in range(n_groups)]
     overflow = size % constant
     groups[-1] = groups[-1][:(overflow if overflow else size)]    # truncate the last group to its actual size if it's less than 5
@@ -74,10 +74,10 @@ def deterministic_select(iterable, k: int):
     # find the median of each group through brute force
     medians = []
     for group in groups:
-        local_median = brute_force_select(group, _ceil(len(group) / 2))
+        local_median = brute_force_select(group, math.ceil(len(group) / 2))
         medians.append(local_median)
 
-    median_of_medians = deterministic_select(medians, _ceil(len(medians) / 2))
+    median_of_medians = deterministic_select(medians, math.ceil(len(medians) / 2))
     return _base_select(deterministic_select, median_of_medians, iterable, k)
 
 
@@ -110,11 +110,6 @@ def _base_select(selector: callable, median, iterable, k: int):
         return median
     else:
         return selector(greater, k - len(less) - equal_count)
-
-
-def _ceil(n: float) -> int:
-    """ Like math.ceil(), but returns the value as an integer. """
-    return int(math.ceil(n))
 
 
 if __name__ == '__main__':
