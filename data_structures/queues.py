@@ -3,32 +3,37 @@
 import abc
 import math
 import operator
-from containers import BaseContainer
+from .containers import BaseContainer
 
 
-class _BaseQueue(BaseContainer):
+class BaseQueue(BaseContainer, metaclass=abc.ABCMeta):
     """
     Base class defining methods common to queue-like data types.
-    The underlying data structure is by default a list, but can be changed (see @property container_type).
+    The underlying data structure is by default a list, but can be changed (see @property _container_type).
     Derived classes MUST implement methods top(), push(), and pop().
     """
-    def __init__(self, container_type=list):
+    def __init__(self, iterable=None, container_type=list):
+        self._can_override_container_type = True
         self.__container_type = container_type
         self.__container = container_type()
+        self._can_override_container_type = False
 
     @property
-    def container_type(self) -> type:
+    def _container_type(self) -> type:
         """
         Returns the type of the underlying data structure used to implement this queue.
         """
         return self.__container_type
 
-    @container_type.setter
-    def container_type(self, new_type: type) -> None:
+    @_container_type.setter
+    def _container_type(self, new_type: type) -> None:
         """
         Sets the type of the underlying data structure used to implement this queue.
         In setting the new type, it will also convert the existing container to the new type.
         """
+        if not self._can_override_container_type:
+            raise ValueError('The underlying data structure of this queue is unmodifiable')
+
         self.__container_type = new_type
         self.__container = new_type(self.__container)
 
@@ -36,57 +41,49 @@ class _BaseQueue(BaseContainer):
     def _container(self) -> list:
         return self.__container
 
-    def __repr__(self) -> str:
-        return '{0}({1})'.format(type(self).__name__, self._container)
-
-    def __str__(self) -> str:
-        return repr(self)
-
-    def __len__(self) -> int:
-        """
-        Returns the number of items in this queue.
-        """
-        return len(self._container)
-
-    def __iter__(self):
-        yield from self._container
-
     @abc.abstractmethod
     def top(self):
+        """
+        Returns the first item in the queue.
+        Raises ValueError if empty.
+        """
         pass
 
     @abc.abstractmethod
     def push(self, item) -> None:
+        """
+        Pushes item into the queue.
+        """
         pass
 
     @abc.abstractmethod
     def pop(self):
+        """
+        Removes and returns the first item in the queue.
+        The first item in the queue must be the same value returned by top().
+        Raises ValueError if empty.
+        """
         pass
 
 
 
-class PriorityQueue(_BaseQueue):
+class PriorityQueue(BaseQueue):
     """
     A Pythonic implementation of a heap priority queue.
     The initializer provides control over order through 'key' and 'reverse' parameters, similar to sorted(...).
     By default (with reverse=False), a max-heap is used.
 
     heapq, a module in the Python Standard Library, makes for an efficient priority queue implementation.
-    However, it is not as high level and is unnecessarily confusing to use with custom comparators.
-    This implementation provides a simple, Pythonic way to use a priority queue with any ordering through
-    parameters similar to sorted(...) (see __init__).
+    However, it is not as high level and offers little control over custom comparators.
+    This implementation provides a simple, Pythonic way to use a priority queue with any ordering through a key function.
     """
 
     @property
-    def container_type(self) -> type:
-        return super().container_type
-
-    @container_type.setter
-    def container_type(self, new_type: type) -> None:
-        raise ValueError('cannot change the underlying data structure for PriorityQueue (list)')
+    def _container_type(self) -> type:
+        return super()._container_type
 
 
-    def __init__(self, iterable=None, key=lambda x: x, reverse=False, gt=operator.gt, lt=operator.lt):
+    def __init__(self, iterable=None, key=lambda x: x, reverse=False, greater_than=operator.gt, less_than=operator.lt):
         """
         Initialize a PriorityQueue object.
 
@@ -103,22 +100,23 @@ class PriorityQueue(_BaseQueue):
         * lt: binary predicate that returns True if its first argument is deemed less than its second (e.g., a < b)
             - used only when reverse=True.
 
-        Recall that this PriorityQueue implements a max-heap;
-        an important distinction between this and sorted(...) is that by default,
-        here items will be ordered from GREATEST to LEAST;
-        sorted(...) by default orders items from LEAST to GREATEST.
+        This PriorityQueue implements a max-heap.
+        An important distinction between this and sorted(...) is that by default,
+        items will be ordered from GREATEST to LEAST,
+        while sorted(...) by default orders items from LEAST to GREATEST.
         These orders can be flipped by setting 'reverse=True'.
         By default, items are deemed greater/less than others as per their __gt__ and __lt__ methods -
         i.e.,  the object returned by 'key(x)' must have implemented __gt__ and/or __lt__ methods.
-        Alternatively, you can provide custom predicate functions as arguments to the 'gt' and 'lt' parameters
-        instead of overloading __gt__ and __lt__ methods.
+        Alternatively, you can provide custom predicate functions as the 'gt' and 'lt' parameters.
         """
+        super().__init__()
+
         if not callable(key):
             raise ValueError('key must be a unary callable predicate')
-        super().__init__()
+
         self._key = key
         self._reverse = reverse
-        self._gt = lt if reverse else gt
+        self._gt = less_than if reverse else greater_than
 
         if iterable:
             for item in iterable:
@@ -131,21 +129,17 @@ class PriorityQueue(_BaseQueue):
 
 
     def __str__(self) -> str:
-        heap = self.copy()
-        s = ', '.join([str(heap.pop()) for _ in range(len(heap))])
-        return '{0}({1})'.format(type(self).__name__, s)
+        contents = ', '.join([str(item) for item in self.view()])
+        return '{0}({1})'.format(type(self).__name__, contents)
 
 
-    def copy(self, deep=True) -> 'PriorityQueue':
+    def copy(self) -> 'PriorityQueue':
         """
         Returns a copy of the object.
         If deep=True, returns a deep copy (different object, same contents).
         Otherwise, returns a reference to itself (same object).
-
-        Θ(n) time when deep=True,
-        Θ(1) time otherwise.
         """
-        return PriorityQueue(self._container, key=self._key, reverse=self._reverse) if deep else self
+        return PriorityQueue(self._container, key=self._key, reverse=self._reverse)
 
 
     def top(self):
@@ -153,10 +147,10 @@ class PriorityQueue(_BaseQueue):
         Returns the highest-priority object in the queue.
         Raises ValueError if the queue is empty.
 
-        Θ(1) time.
+        O(1) time.
         """
         if not self:
-            raise ValueError('queue is already empty')
+            raise ValueError('Cannot retrieve the top of an empty queue')
         return self._container[0]
 
 
@@ -167,7 +161,8 @@ class PriorityQueue(_BaseQueue):
         O(log n) time.
         """
         self._container.append(item)
-        self._sift_up(len(self) - 1)
+        size = len(self) - 1
+        self._sift_up(size)
 
 
     def pop(self):
@@ -179,17 +174,31 @@ class PriorityQueue(_BaseQueue):
         O(log n) time.
         """
         if not self:
-            raise ValueError('pop from empty queue')
+            raise ValueError('Cannot pop from an empty queue')
+
         result = self._container[0]
-        self.remove(0)
+        self._remove(0)
         return result
 
 
-    def remove(self, index: int) -> None:
+    def view(self) -> list:
         """
-        Caution - do not use this unless fine-grained control is needed.
-        Use sparingly in conjunction with the methods 'find(...)' and 'view()'.
+        Returns an ordered list containing all the items in the queue.
+        The list's order respects the queue's `reverse` and `gt` properties.
 
+        O(nlogn) time.
+        """
+        result = []
+        copy = self.copy()
+        while copy:
+            next_value = copy.pop()
+            result.append(next_value)
+
+        return result
+
+
+    def _remove(self, index: int) -> None:
+        """
         Helper method that removes the item at position 'index' in the underlying list.
         Raises ValueError if the queue is already empty.
         Raises IndexError if 'index' is out of bounds.
@@ -207,38 +216,13 @@ class PriorityQueue(_BaseQueue):
         self._sift_down(index)
 
 
-    def view(self) -> tuple:
-        """
-        Returns a tuple representing the underlying list.
-        A separate tuple is returned as to prevent modification of the underlying list.
-
-        Use in conjunction with the methods 'find(...)' and 'remove(...)'.
-
-        Θ(n) time.
-        """
-        return tuple(self._container)
-
-
-    def find(self, item) -> int:
-        """
-        Returns the index of item in the underlying list, or -1 if not found.
-        Similar to list.index, but returns -1 upon failure instead of raising ValueError.
-
-        Use in conjunction with the methods 'view()' and 'remove(...)'.
-
-        O(n) time.
-        """
-        try:
-            return self._container.index(item)
-        except ValueError:
-            return -1
-
-
     def _compare(self, a: int, b: int) -> bool:
         """
         Returns True if key(a) is greater than key(b) (or 'less than' if reverse=True).
         """
-        return self._gt(self._key(self._container[a]), self._key(self._container[b]))
+        key_a = self._key(self._container[a])
+        key_b = self._container[b]
+        return self._gt(key_a, key_b)
 
 
     def _sift_up(self, i: int) -> None:
@@ -267,29 +251,27 @@ class PriorityQueue(_BaseQueue):
             larger = right
         elif self._in_heap(left):
             larger = left
-        else:
-            return
 
-        if self._compare(larger, i):
+        if larger is not None and self._compare(larger, i):
             self._container[i], self._container[larger] = self._container[larger], self._container[i]
             self._sift_down(larger)
 
 
     def _heapify(self) -> None:
         """
-        Converts the arbitrary list into a heap.
+        Converts the underlying list into a heap.
 
         O(n) time.
         """
-        for i in range(self._parent_of(len(self)), -1, -1):
+        size = len(self)
+        first_parent = self._parent_of(size)
+        for i in range(first_parent, -1, -1):
             self._sift_down(i)
 
 
     def _in_heap(self, i: int) -> bool:
         """
         Returns True if index 'i' is within the bounds of the list's size.
-
-        Θ(1) time.
         """
         return 0 <= i < len(self)
 
