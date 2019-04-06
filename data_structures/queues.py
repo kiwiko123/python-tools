@@ -3,7 +3,7 @@
 import abc
 import math
 import operator
-from .containers import BaseContainer
+from containers import BaseContainer
 
 
 class BaseQueue(BaseContainer, metaclass=abc.ABCMeta):
@@ -12,33 +12,20 @@ class BaseQueue(BaseContainer, metaclass=abc.ABCMeta):
     The underlying data structure is by default a list, but can be changed (see @property _container_type).
     Derived classes MUST implement methods top(), push(), and pop().
     """
-    def __init__(self, iterable=None, container_type=list):
-        self._can_override_container_type = True
-        self.__container_type = container_type
-        self.__container = container_type()
-        self._can_override_container_type = False
+    def __init__(self, iterable=None):
+        self.__container = self._container_type(iterable)
 
     @property
+    @abc.abstractmethod
     def _container_type(self) -> type:
         """
         Returns the type of the underlying data structure used to implement this queue.
+        Override this for customization.
         """
-        return self.__container_type
-
-    @_container_type.setter
-    def _container_type(self, new_type: type) -> None:
-        """
-        Sets the type of the underlying data structure used to implement this queue.
-        In setting the new type, it will also convert the existing container to the new type.
-        """
-        if not self._can_override_container_type:
-            raise ValueError('The underlying data structure of this queue is unmodifiable')
-
-        self.__container_type = new_type
-        self.__container = new_type(self.__container)
+        pass
 
     @property
-    def _container(self) -> list:
+    def _container(self):
         return self.__container
 
     @abc.abstractmethod
@@ -80,7 +67,7 @@ class PriorityQueue(BaseQueue):
 
     @property
     def _container_type(self) -> type:
-        return super()._container_type
+        return list
 
 
     def __init__(self, iterable=None, key=lambda x: x, reverse=False, greater_than=operator.gt, less_than=operator.lt):
@@ -95,9 +82,11 @@ class PriorityQueue(BaseQueue):
                 key=lambda x: (x % 2 == 0, x < 10)
               Items will be sorted in the order that the criteria appears in the returned tuple.
         * reverse: set True if items should be arranged in reverse order (read below).
-        * gt: binary predicate that returns True if its first argument is deemed greater than its second (e.g., a > b).
+        * greater_than: binary predicate that returns True if its first argument is deemed greater than its second.
+            - i.e., greater_than(a, b) indicates a > b.
             - used only when reverse=False.
-        * lt: binary predicate that returns True if its first argument is deemed less than its second (e.g., a < b)
+        * less_than: binary predicate that returns True if its first argument is deemed less than its second.
+            - i.e., less_than(a, b) indicates a < b.
             - used only when reverse=True.
 
         This PriorityQueue implements a max-heap.
@@ -109,18 +98,18 @@ class PriorityQueue(BaseQueue):
         i.e.,  the object returned by 'key(x)' must have implemented __gt__ and/or __lt__ methods.
         Alternatively, you can provide custom predicate functions as the 'gt' and 'lt' parameters.
         """
-        super().__init__()
+        super().__init__(iterable=iterable)
 
         if not callable(key):
             raise ValueError('key must be a unary callable predicate')
 
         self._key = key
         self._reverse = reverse
-        self._gt = less_than if reverse else greater_than
+        self._greater_than = greater_than
+        self._less_than = less_than
+        self._comparator = self._less_than if reverse else self._greater_than
 
-        if iterable:
-            for item in iterable:
-                self._container.append(item)
+        if self._container:
             self._heapify()
 
 
@@ -137,7 +126,13 @@ class PriorityQueue(BaseQueue):
         """
         Returns a new PriorityQueue object containing the same properties and values as this one.
         """
-        return PriorityQueue(self._container, key=self._key, reverse=self._reverse)
+        return PriorityQueue(
+            self._container,
+            key=self._key,
+            reverse=self._reverse,
+            greater_than=self._greater_than,
+            less_than=self._less_than
+        )
 
 
     def top(self):
@@ -182,7 +177,7 @@ class PriorityQueue(BaseQueue):
     def view(self) -> list:
         """
         Returns an ordered list containing all the items in the queue.
-        The list's order respects the queue's `reverse` and `gt` properties.
+        The list's order respects the queue's ordering.
 
         O(nlogn) time.
         """
@@ -219,8 +214,8 @@ class PriorityQueue(BaseQueue):
         Returns True if key(a) is greater than key(b) (or 'less than' if reverse=True).
         """
         key_a = self._key(self._container[a])
-        key_b = self._container[b]
-        return self._gt(key_a, key_b)
+        key_b = self._key(self._container[b])
+        return self._comparator(key_a, key_b)
 
 
     def _sift_up(self, i: int) -> None:

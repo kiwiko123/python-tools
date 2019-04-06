@@ -21,7 +21,7 @@ class MultiSet(BaseContainer):
     def __iter__(self):
         for item, count in self._container.items():
             for _ in range(count):
-                yield(item)
+                yield item
 
     def add(self, item) -> None:
         """
@@ -55,27 +55,21 @@ class MultiSet(BaseContainer):
         else:
             raise ValueError('"{0}" not in set'.format(item))
 
-    def union(self, other: set) -> 'MultiSet':
+    def union(self, iterable) -> 'MultiSet':
         """
-        Returns a new MultiSet containing all items in this set and all items in the other set.
+        Returns a new MultiSet containing all items in both containers.
         """
-        if not (isinstance(other, set) or isinstance(other, MultiSet)):
-            raise TypeError('union only takes a set or MultiSet; received {0}'.format(type(other)))
-
-        result = self.copy()
-        for item in other:
+        result = MultiSet(iterable)
+        for item in self:
             result.add(item)
 
         return result
 
-    def intersection(self, other: set) -> 'MultiSet':
+    def intersection(self, iterable) -> 'MultiSet':
         """
-        Returns a new MultiSet containing only items present in both sets.
+        Returns a new MultiSet containing only items present in both containers.
         """
-        if not (isinstance(other, set) or isinstance(other, MultiSet)):
-            raise TypeError('intersection only takes a set or MultiSet; received {0}'.format(type(other)))
-
-        return MultiSet((i for i in other if i in self))
+        return MultiSet((i for i in iterable if i in self))
 
     def count(self, item) -> int:
         """

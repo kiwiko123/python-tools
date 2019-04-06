@@ -85,17 +85,17 @@ class Recordable:
         return self._size
 
 
-    def timeline(self, ascending=True) -> [UpdateHistory]:
+    def timeline(self, descending=True) -> [UpdateHistory]:
         """
         Returns a one-dimensional list of all updates that have been captured, ordered by time-of-update.
-        If ascending=True, order the list from least-recent to most-recent update.
-        Otherwise, order from most-recent to least-recent.
+        If descending=True, order the list from most-recent to least-recent update.
+        Otherwise, order from least-recent to most-recent.
         """
         updates = []
         for records in self._history.values():
             updates.extend(records)
 
-        return sorted(updates, key=lambda update: update.time_of_update, reverse=not ascending)
+        return sorted(updates, key=lambda update: update.time_of_update, reverse=descending)
 
 
     def report(self) -> {str: [UpdateHistory]}:
